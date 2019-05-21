@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.misc import imresize
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 from matplotlib.patches import Rectangle
@@ -34,6 +35,8 @@ class BurnLabelerUI(object):
                     print("successfully created %s" % path)
 
         self.im = io.imread(image_path)
+        scale = 1000.0/float(self.im.shape[1]) # enforce 1000 pixel width
+        self.im = imresize(arr=self.im, size=scale)
         self.imname = image_path
         # remove any directory specification
         if (self.imname.rfind('/')):
@@ -101,6 +104,7 @@ class BurnLabelerUI(object):
         self.fig.canvas.mpl_disconnect(self.cidmo)
         self.fig.canvas.mpl_disconnect(self.cidor)
         # save subimages and close (perhaps move image to a 'classified' folder)
+        io.imwrite('./labeled/originals/'+self.imname+'.bmp', self.im)
         for row in range(self.imageMatrix.shape[0]):
             for col in range(self.imageMatrix.shape[1]):
                 cellval = self.imageMatrix[row][col]
@@ -159,11 +163,19 @@ class BurnLabelerUI(object):
     def on_press(self, event):
         self.held_down = True
         if event.inaxes != self.imax.axes: return
+        r = int(event.ydata/self.side)
+        c = int(event.xdata/self.side)
         # determine where the click happened
         try:
             # stage changes for data structure
             if self.inBounds(event.ydata, event.xdata): # hack to prevent button clicking from messing with the data structure
-            	self.staged.append((int(event.ydata/self.side), int(event.xdata/self.side), self.cursor))
+                if self.imageMatrix[r][c] == self.cursor:
+                    self.rFill(r+1, c)
+                    self.rFill(r-1, c)
+                    self.rFill(r, c+1)
+                    self.rFill(r, c-1)
+                else:
+            	    self.staged.append((r, c, self.cursor))
         except TypeError:
             print("Clicked Off Picture")
         except IndexError:
@@ -189,4 +201,19 @@ class BurnLabelerUI(object):
         if not self.isClosing:
             self.annotate()
 
-blui = BurnLabelerUI('unlabeled/burn.jpg', 50)
+    def rFill(self, row, col):
+        if self.imageMatrix[row][col] == self.cursor:
+            return
+        # search the underlying data structure and fill in
+        # ensure is the cursor
+        self.imageMatrix[row][col] = self.cursor
+        ib = lambda r,c: (0 <= r < self.imageMatrix.shape[0] and 0 <= c < self.imageMatrix.shape[1])
+        # above
+        if ib(row-1, col):
+            self.rFill(row-1, col)
+        if ib(row, col+1):
+            self.rFill(row, col+1)
+        if ib(row+1, col):
+            self.rFill(row+1, col)
+        if ib(row, col-1):
+            self.rFill(row, col-1)
